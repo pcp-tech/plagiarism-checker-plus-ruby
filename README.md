@@ -64,7 +64,10 @@ Other codes (for example on `401`, `404`, `429` or `503`) come through as the ra
 - **An AI score is a likelihood, not proof** that someone used AI. A similarity score does not decide on its own whether text is plagiarism. Review the result yourself, and do not use either score alone to accuse anyone.
 - **The API needs a paid plan.** A key on the free plan returns `403 plan_required`.
 - Each tool you run is billed at the full word count. The rate limit is 60 requests a minute per key.
-- API documentation: https://plagiarismcheckerplus.com/integrations/api
+- Plagiarism Checker API overview: https://plagiarismcheckerplus.com/integrations/api
+- AI Detector API overview: https://plagiarismcheckerplus.com/ai-detector-api
+- API reference (try requests in the browser): https://app.plagiarismcheckerplus.com/api-docs
+- Create an API key: https://app.plagiarismcheckerplus.com/settings/api
 - The OpenAPI spec this client follows is in [`spec/openapi.json`](spec/openapi.json).
 
 ## Other languages
