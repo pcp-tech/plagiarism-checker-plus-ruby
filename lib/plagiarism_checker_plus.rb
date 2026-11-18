@@ -2,22 +2,41 @@
 
 require "json"
 require "net/http"
+require "openssl"
 require "time"
 require "uri"
 
 # Client for the Plagiarism Checker Plus public API. Standard library only.
 module PlagiarismCheckerPlus
-  VERSION = "1.0.0"
+  VERSION = "1.1.0"
   DEFAULT_BASE_URL = "https://app.plagiarismcheckerplus.com/api/public/v1"
 
   module ErrorCodes
+    # Deprecated: no longer returned. Free accounts get a free API trial and free test keys.
     PLAN_REQUIRED = "plan_required"
     TEXT_TOO_SHORT = "text_too_short"
     DOC_TOO_LONG = "doc_too_long"
+    # 402: not enough words across all sources (wordsNeeded, wordsAvailable, balances, billingUrl).
     INSUFFICIENT_WORDS = "insufficient_words"
+    # 402: the free API trial cannot cover the request (wordsNeeded, trialRemaining, trialTotal, billingUrl).
+    TRIAL_EXHAUSTED = "trial_exhausted"
+    # 402: the key's monthly word cap would be exceeded (wordsNeeded, monthlyWordCap, usedThisMonth).
+    KEY_CAP_REACHED = "key_cap_reached"
+    INVALID_REQUEST = "invalid_request"
+    INVALID_JSON = "invalid_json"
+    UNAUTHORIZED = "unauthorized"
+    INVALID_API_KEY = "invalid_api_key"
+    KEY_REVOKED = "key_revoked"
+    EMAIL_UNVERIFIED = "email_unverified"
+    FORBIDDEN = "forbidden"
+    NOT_FOUND = "not_found"
+    RATE_LIMITED = "rate_limited"
+    WORKERS_UNAVAILABLE = "workers_unavailable"
+    INTERNAL_ERROR = "internal_error"
   end
 
-  # A non-2xx response. +code+ is the API's error code, such as plan_required.
+  # A non-2xx response. +code+ is the API's error code, such as insufficient_words.
+  # +details+ is the response's error object (wordsNeeded, billingUrl and other detail fields).
   class Error < StandardError
     attr_reader :status, :code, :retry_after, :body
 
@@ -28,6 +47,54 @@ module PlagiarismCheckerPlus
       @retry_after = retry_after
       @body = body
     end
+
+    # The response's error object: code, message and any detail fields, or {}.
+    def details
+      body.is_a?(Hash) && body["error"].is_a?(Hash) ? body["error"] : {}
+    end
+  end
+
+  # Verifies webhook deliveries. Each one carries
+  #   PCP-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<raw body>")>
+  module Webhook
+    SIGNATURE_HEADER = "PCP-Signature"
+    # How old a signed timestamp may be, in seconds, before it is rejected.
+    DEFAULT_TOLERANCE = 300
+
+    # Check a PCP-Signature header against the raw request body (before JSON parsing).
+    # Returns false for a missing or malformed header, a wrong signature, or a timestamp
+    # more than +tolerance+ seconds from +now+ (unix seconds, default the current time).
+    # Signatures are compared in constant time.
+    def self.verify_signature(secret, header, body, tolerance: DEFAULT_TOLERANCE, now: nil)
+      return false if secret.nil? || secret.empty? || header.nil? || header.empty? || body.nil?
+
+      timestamp = nil
+      signatures = []
+      header.to_s.split(",").each do |part|
+        key, value = part.split("=", 2).map { |v| v.to_s.strip }
+        next if value.nil? || value.empty?
+
+        if key == "t" && value.match?(/\A\d+\z/)
+          timestamp = value.to_i
+        elsif key == "v1" && value.match?(/\A\h+\z/)
+          signatures << value.downcase
+        end
+      end
+      return false if timestamp.nil? || signatures.empty?
+      return false if ((now || Time.now.to_i) - timestamp).abs > tolerance
+
+      expected = OpenSSL::HMAC.hexdigest("SHA256", secret, "#{timestamp}.".b + body.to_s.b)
+      signatures.any? { |signature| secure_compare(expected, signature) }
+    end
+
+    def self.secure_compare(a, b)
+      return false unless a.bytesize == b.bytesize
+
+      result = 0
+      a.bytes.zip(b.bytes) { |x, y| result |= x ^ y }
+      result.zero?
+    end
+    private_class_method :secure_compare
   end
 
   class ScanTimeoutError < StandardError; end
@@ -88,6 +155,7 @@ module PlagiarismCheckerPlus
       request("GET", "/scans", query: { page: page, limit: limit })
     end
 
+    # Plan, word balances, free API trial ("trial"), "balances", "autoTopup" and this key's "key" mode and cap.
     def get_account
       request("GET", "/account")
     end

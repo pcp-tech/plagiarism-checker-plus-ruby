@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require "json"
+require "openssl"
 require_relative "../lib/plagiarism_checker_plus"
 
 class FakeTransport
@@ -43,11 +44,35 @@ class ClientTest < Minitest::Test
     assert t.calls[1][1].end_with?("/scans?page=2&limit=5")
   end
 
-  def test_error_code
-    t = FakeTransport.new([[403, {}, { "error" => { "code" => "plan_required", "message" => "Paid plan needed" } }]])
-    error = assert_raises(PlagiarismCheckerPlus::Error) { client(t).get_account }
-    assert_equal 403, error.status
-    assert_equal PlagiarismCheckerPlus::ErrorCodes::PLAN_REQUIRED, error.code
+  def test_error_code_and_details
+    billing = "https://app.plagiarismcheckerplus.com/developers/billing"
+    t = FakeTransport.new([[402, {}, { "error" => { "code" => "key_cap_reached", "message" => "Cap reached",
+                                                    "monthlyWordCap" => 5000, "billingUrl" => billing } }]])
+    error = assert_raises(PlagiarismCheckerPlus::Error) { client(t).create_scan("text", ["plagiarism"]) }
+    assert_equal 402, error.status
+    assert_equal PlagiarismCheckerPlus::ErrorCodes::KEY_CAP_REACHED, error.code
+    assert_equal 5000, error.details["monthlyWordCap"]
+    assert_equal "trial_exhausted", PlagiarismCheckerPlus::ErrorCodes::TRIAL_EXHAUSTED
+    assert_equal "plan_required", PlagiarismCheckerPlus::ErrorCodes::PLAN_REQUIRED
+  end
+
+  def test_webhook_signature
+    secret = "whsec_test_secret"
+    body = '{"id":"evt_1","type":"scan.completed","data":{}}'
+    ts = 1_800_000_000
+    sign = ->(t, b, k = secret) { OpenSSL::HMAC.hexdigest("SHA256", k, "#{t}.#{b}") }
+    header = "t=#{ts},v1=#{sign.call(ts, body)}"
+    w = PlagiarismCheckerPlus::Webhook
+    assert_equal "PCP-Signature", w::SIGNATURE_HEADER
+    assert w.verify_signature(secret, header, body, now: ts + 10)
+    assert w.verify_signature(secret, "t=#{ts},v1=#{sign.call(ts, body, 'other')},v1=#{sign.call(ts, body)}", body, now: ts)
+    refute w.verify_signature("whsec_wrong", header, body, now: ts)
+    refute w.verify_signature(secret, header, "#{body} ", now: ts)
+    refute w.verify_signature(secret, header, body, now: ts + 301)
+    refute w.verify_signature(secret, header, body, now: ts - 301)
+    assert w.verify_signature(secret, header, body, now: ts + 500, tolerance: 600)
+    refute w.verify_signature(secret, "t=#{ts}", body, now: ts)
+    refute w.verify_signature(secret, nil, body, now: ts)
   end
 
   def test_wait_honours_retry_after
