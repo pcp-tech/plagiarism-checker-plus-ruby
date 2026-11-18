@@ -2,7 +2,7 @@
 
 Official client for the [Plagiarism Checker Plus API](https://plagiarismcheckerplus.com/integrations/api). Ruby 2.7+, standard library only.
 
-Get a free API key in the [developer portal](https://app.plagiarismcheckerplus.com/developers). Test keys are free and unlimited, and every free account gets 5,000 live API words once, with no card. See [API pricing](https://plagiarismcheckerplus.com/api-pricing).
+Get a free API key in the [developer portal](https://app.plagiarismcheckerplus.com/developers). Test keys are free and unlimited, and every free account gets 2,000 live API words once, with no card. See [API pricing](https://plagiarismcheckerplus.com/api-pricing).
 
 ## Install
 
@@ -50,7 +50,7 @@ end
 ## Test keys, free trial and pricing
 
 - **Test keys** (`pcp_test_...`) are free and unlimited on every plan, including free. They never run a check: `create_scan` returns as usual and `get_scan` returns `completed` with fixed sample results in the same shape as a real scan, marked `"sandbox": true`. Use them to build and test your integration.
-- **Free API trial**: each free account gets 5,000 API words once for live keys (`pcp_...`), with no card. When the trial cannot cover a request, the API returns `402 trial_exhausted` and nothing is charged.
+- **Free API trial**: each free account gets 2,000 API words once for live keys (`pcp_...`), with no card. When the trial cannot cover a request, the API returns `402 trial_exhausted` and nothing is charged.
 - **Paid app plans** (Student, Personal, Team) use their plan words for API calls.
 - **API plans**: Starter $25/month (300,000 words), Growth $99/month (1,500,000 words), Scale $399/month (7,500,000 words).
 - **Pay as you go**: words from $4.50 (50,000 words, $0.09 per 1,000 words). Purchased words never expire.
@@ -117,7 +117,7 @@ Failed calls raise `PlagiarismCheckerPlus::Error`. It carries the HTTP status an
 | `text_too_short` | 400 | Plagiarism needs at least 30 words, AI detection at least 50. Nothing is charged. |
 | `doc_too_long` | 400 | The text is longer than the account allows per check. |
 | `unauthorized`, `invalid_api_key`, `key_revoked` | 401 | Missing, unknown or revoked API key. |
-| `trial_exhausted` | 402 | The free API trial (5,000 words) cannot cover this request. Includes `wordsNeeded`, `trialRemaining`, `trialTotal` and `billingUrl`. Buy words or choose an API plan; test keys stay free. Nothing is charged. |
+| `trial_exhausted` | 402 | The free API trial (2,000 words) cannot cover this request. Includes `wordsNeeded`, `trialRemaining`, `trialTotal` and `billingUrl`. Buy words or choose an API plan; test keys stay free. Nothing is charged. |
 | `insufficient_words` | 402 | Not enough words across all sources. Includes `wordsNeeded`, `wordsAvailable`, `balances` and `billingUrl`. Nothing is charged. |
 | `key_cap_reached` | 402 | This key's monthly word cap would be exceeded. Includes `wordsNeeded`, `monthlyWordCap` and `usedThisMonth`. Raise the cap in the developer portal. |
 | `email_unverified` | 403 | Verify the account's email address first. |
